@@ -7,21 +7,10 @@ const { Pool } = pkg;
 
 // ✅ Create PostgreSQL pool
 const pool = new Pool({
-  host: process.env.DATABASE_HOST || "localhost",
-  user: process.env.DATABASE_USER,
-  password: process.env.DATABASE_PASS,
-  database: process.env.DATABASE_NAME,
-  port: Number(process.env.DATABASE_PORT) || 5432,
-
-  // Render / production มักต้องใช้ SSL
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
-
-  max: 10,                 // connectionLimit
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionString: process.env.DATABASE_URL, // ใช้ URL ที่ Render ให้
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 // Test connection
