@@ -45,6 +45,7 @@ const constants = {
   createNewUser: `
     INSERT INTO users (line_uid, restaurant_id, name, gender, phone, birth_date, birth_time, birth_place, created_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+    RETURNING *;
   `,
 
   preEditProfile: `
@@ -69,7 +70,7 @@ const constants = {
   // User elements queries
   insertElement: `
     INSERT INTO user_elements (user_id, main_element, favorable_elements, unfavorable_elements, created_at)
-    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+    VALUES ($1, $2, $3::jsonb, $4::jsonb, CURRENT_TIMESTAMP)
   `,
 
   updateElementAfterEditProfile: `
@@ -154,26 +155,33 @@ AND EXISTS (
     SELECT 1
     FROM user_elements ue
     WHERE ue.user_id = $2
-      AND m.element::jsonb && ue.favorable_elements::jsonb
+      AND m.element ?| (
+          SELECT array_agg(value)
+          FROM jsonb_array_elements_text(ue.favorable_elements)
+      )
 )
 ORDER BY m.created_at DESC
-LIMIT $3 OFFSET $4
+LIMIT $3 OFFSET $4;
+
   `,
 
   filterMenu: `
 SELECT m.id, m.name, m.price, m.element, m.image_url
 FROM menu m
-WHERE m.restaurant_id = $1 /**element**/
-  AND m.status = 'AVAILABLE'   -- กรองเฉพาะที่สถานะเป็น AVAILABLE
+WHERE m.restaurant_id = $1
+  /**element**/
+  AND m.status = 'AVAILABLE'
 ORDER BY m.price /**price**/
-LIMIT $2 OFFSET $3
-
+LIMIT $3 OFFSET $4
     `,
 
   filterMenuCount: `
-    SELECT COUNT(*) AS total
+SELECT COUNT(*) AS total
 FROM menu m
 WHERE m.restaurant_id = $1
+  /**element**/
+  AND m.status = 'AVAILABLE'
+
     `,
 
   getAllrowMenuElementLike: `
@@ -185,9 +193,11 @@ WHERE m.restaurant_id = $1
       SELECT 1
       FROM user_elements ue
       WHERE ue.user_id = $2
-        AND m.element::jsonb && ue.favorable_elements::jsonb
-  )
-
+        AND m.element ?| (
+            SELECT array_agg(value)
+            FROM jsonb_array_elements_text(ue.favorable_elements)
+        )
+  );
   `,
 
   findMenuelelemet: `

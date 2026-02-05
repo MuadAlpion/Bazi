@@ -1,69 +1,45 @@
-import constants from "../lib/constants.js"
-import { executeQuery } from "../lib/db.js"
-import bcrypt from "bcrypt"
+import AdminService from '../services/admin.service.js'
+
 import {
   generateAccessToken,
-  generateRefreshToken,
-  verifyRefreshToken,
-  revokeAccessToken,
-  revokeRefreshToken,
-} from "../lib/jwt.js"
+  verifyRefreshToken
+} from '../lib/jwt.js'
+const adminService = new AdminService()
 
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body
-    const checkLogin = await executeQuery(constants.adminLogin, [email])
-
-    if (checkLogin.length === 0) {
-      return res.status(401).json({ message: "Invalid email or password" })
-    }
-
-    const isMatch = await bcrypt.compare(String(password), checkLogin[0].password)
-    if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" })
-    }
-    const admin = checkLogin[0]
-    const accessToken = generateAccessToken({
-      userId: admin.id,
-      userType: "ADMIN",
-    })
-
-    const refreshToken = await generateRefreshToken(admin.id, "Admin", {
-      deviceInfo: req.headers["user-agent"],
-      ipAddress: req.ip,
-    })
-
-    res.cookie("refreshToken", refreshToken, {
+    const result = await adminService.login(email, password)
+    
+    res.cookie('refreshToken', result.tokens.refreshToken, {
       httpOnly: true,
-      sameSite: "Lax",
+      sameSite: 'Lax',
       secure: false,
-      path: "/api/admin",
+      path: '/api/admin',
     })
-
+    
     return res.status(200).json({
-      message: "Login successful",
+      message: 'Login successful',
       user: {
-        userId: admin.id,
+        userId: result.restaurant.id,
         email: email,
       },
-      tokens: {
-        accessToken,
-        refreshToken,
-      },
+      tokens: result.tokens,
     })
   } catch (error) {
-    console.error("[Admin Login Error]", error)
-    return res.status(500).json({ message: "Server error" })
+    console.error('[Admin Login Error]', error)
+    return res.status(500).json({ message: 'Server error' })
   }
 }
 
 export const refreshAccessToken = async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken
+    console.log(refreshToken)
     if (!refreshToken) {
       return res.status(401).json({
-        message: "Refresh token required",
-        code: "TOKEN_REQUIRED",
+        message: 'Refresh token required',
+        code: 'TOKEN_REQUIRED',
       })
     }
 
@@ -79,16 +55,16 @@ export const refreshAccessToken = async (req, res) => {
       accessToken: newAccessToken,
     })
   } catch (error) {
-    if (error.message === "Refresh token expired" || error.message === "Refresh token not found or expired") {
+    if (error.message === 'Refresh token expired' || error.message === 'Refresh token not found or expired') {
       return res.status(401).json({
-        message: "Refresh token expired",
-        code: "REFRESH_TOKEN_EXPIRED",
+        message: 'Refresh token expired',
+        code: 'REFRESH_TOKEN_EXPIRED',
       })
     }
 
     return res.status(403).json({
-      message: "Invalid refresh token",
-      code: "REFRESH_TOKEN_INVALID",
+      message: 'Invalid refresh token',
+      code: 'REFRESH_TOKEN_INVALID',
     })
   }
 }
@@ -97,40 +73,28 @@ export const logout = async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken
     const authHeader = req.headers.authorization
-    const accessToken = authHeader && authHeader.split(" ")[1]
-
-    if (accessToken) {
-      await revokeAccessToken(accessToken, "user_logout")
-    }
-
-    if (refreshToken) {
-      await revokeRefreshToken(refreshToken, "user_logout")
-    }
-
+    const accessToken = authHeader && authHeader.split(' ')[1]
+    
+    await adminService.logout(accessToken, refreshToken)
+    
     return res.status(200).json({
-      message: "Logged out successfully",
+      message: 'Logged out successfully',
     })
   } catch (error) {
-    console.error("[Logout Error]", error)
-    return res.status(500).json({ message: "Server error" })
+    console.error('[Logout Error]', error)
+    return res.status(500).json({ message: 'Server error' })
   }
 }
 
 export const createRestaurant = async (req, res) => {
   try {
-    const { name, email, password, phone, address } = req.body
-  
-    const hashedPassword = await bcrypt.hash(String(password), 12)
-    
-    const checkEmail = await executeQuery(constants.restaurantLogin, [email])
-    if(checkEmail.length > 0) {
-      res.status(400).json({ message: "Duplicate Email"})
-    } else{
-      await executeQuery(constants.adminRegisRestaurant, [name, email, hashedPassword, phone, address])
-      res.status(201).json({ message: "Restaurant created" })
-    }
+    const result = await adminService.createRestaurant(req.body)
+    res.status(201).json({ message: 'Restaurant created' })
   } catch (error) {
-        console.error("[CreateRestaurant Error]", error)
-    return res.status(500).json({ message: "Server error" })
+    console.error('[CreateRestaurant Error]', error)
+    if (error.message === 'Duplicate Email') {
+      return res.status(400).json({ message: 'Duplicate Email' })
+    }
+    return res.status(500).json({ message: 'Server error' })
   }
 }

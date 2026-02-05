@@ -1,5 +1,4 @@
 -- PostgreSQL Database Schema for Bazi
--- Converted from MySQL to PostgreSQL
 
 -- Create ENUM types for PostgreSQL
 CREATE TYPE admin_role AS ENUM ('ADMIN', 'SUPER_ADMIN');
