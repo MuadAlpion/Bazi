@@ -1,8 +1,8 @@
-import db from "../lib/db.js"
+import { executeQuery } from "../lib/db.js"
 
 export const health = async (req, res) => {
  try {
-    await db.query("SELECT 1")
+    await executeQuery("SELECT 1")
     res.status(200).json({
       status: "healthy",
       database: "connected",

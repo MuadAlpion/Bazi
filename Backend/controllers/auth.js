@@ -1,5 +1,5 @@
 import constants from "../lib/constants.js"
-import db from "../lib/db.js"
+import { executeQuery, executeQueryWithTransaction } from "../lib/db.js"
 import axios from "axios"
 import crypto from "crypto"
 import dotenv from "dotenv"
@@ -27,10 +27,10 @@ export const lineUIDCheck = async (req, res) => {
 
     const restaurantId = decodeShort(token);
     if (!restaurantId) {
-      return res.status(401).json({ message: "Retaurant not found" });
+      return res.status(401).json({ message: "Restaurant not found" });
     }
 
-    const checkRestaurant = await db.query(
+    const checkRestaurant = await executeQuery(
       constants.CheckRestarant,
       [restaurantId]
     );
@@ -39,7 +39,7 @@ export const lineUIDCheck = async (req, res) => {
       return res.status(404).json({ message: "Restaurant not found" });
     }
 
-    const [checkUser] = await db.query(
+    const checkUser = await executeQuery(
       constants.CheckUser,
       [lineUid, restaurantId]
     );
@@ -92,34 +92,30 @@ export const lineUIDCheck = async (req, res) => {
 }
 
 export const register = async (req, res) => {
-  const connection = await db.getConnection()
   try {
-    await connection.beginTransaction()
     const token = req.query.t;
 
     const { lineUid, name, gender, phone, birth_date, birth_time, birth_place } = req.body
     const restaurantId = decodeShort(token);
 
     if (!restaurantId) {
-      return res.status(401).json({ message: "Retaurant not found", });
+      return res.status(401).json({ message: "Restaurant not found", });
     }
 
-    const checkRestaurant = await connection.execute(constants.CheckRestarant, [restaurantId])
-    if (checkRestaurant[0].length === 0) {
-      await connection.rollback()
+    const checkRestaurant = await executeQuery(constants.CheckRestarant, [restaurantId])
+    if (checkRestaurant.length === 0) {
       return res.status(404).json({ message: "Restaurant not found" })
     }
 
-    const checkMember = await connection.execute(constants.CheckUser, [lineUid, restaurantId])
-    if (checkMember[0].length > 0) {
-      await connection.rollback()
+    const checkMember = await executeQuery(constants.CheckUser, [lineUid, restaurantId])
+    if (checkMember.length > 0) {
       return res.status(409).json({ message: "User already registered" })
     }
 
     const [year, month, day] = birth_date.split("-").map(Number)
     const [hour, minute] = birth_time.split(":").map(Number)
 
-    const createUserResult = await connection.execute(constants.createNewUser, [
+    const createUserResult = await executeQuery(constants.createNewUser, [
       lineUid,
       restaurantId,
       name,
@@ -129,7 +125,7 @@ export const register = async (req, res) => {
       birth_time,
       birth_place,
     ])
-    const userId = createUserResult[0].insertId
+    const userId = createUserResult[0].id
 
     let baziResponse
     try {
@@ -155,12 +151,10 @@ export const register = async (req, res) => {
       )
     } catch (apiError) {
       console.error("[Bazi API Error]", apiError.message)
-      await connection.rollback()
       return res.status(503).json({ message: "Bazi service unavailable" })
     }
 
     if (!baziResponse?.data?.summary) {
-      await connection.rollback()
       return res.status(502).json({ message: "Invalid Bazi response" })
     }
 
@@ -170,18 +164,15 @@ export const register = async (req, res) => {
     const unfavorable_elements = summary.unfavorableElements
 
     if (!main_element || !VALID_ELEMENTS.includes(main_element)) {
-      await connection.rollback()
       return res.status(502).json({ message: "Invalid element data" })
     }
 
-    await connection.execute(constants.insertElement, [
+    await executeQuery(constants.insertElement, [
       userId,
       main_element,
       JSON.stringify(favorable_elements),
       JSON.stringify(unfavorable_elements),
     ])
-
-    await connection.commit()
 
     const accessToken = generateAccessToken({
       userId: userId,
@@ -214,11 +205,8 @@ export const register = async (req, res) => {
       },
     })
   } catch (error) {
-    await connection.rollback()
     console.error("[Register Error]", error)
     return res.status(500).json({ message: "Server error" })
-  } finally {
-    connection.release()
   }
 }
 
@@ -226,7 +214,7 @@ export const preEditProfile = async (req, res) => {
   try {
     const userID = req.user.id
 
-    const [info] = await db.query(constants.preEditProfile, [userID])
+    const info = await executeQuery(constants.preEditProfile, [userID])
     return res.status(200).json({ info })
   } catch (error) {
     console.error("[preEditProfile Error]", error)
@@ -235,20 +223,17 @@ export const preEditProfile = async (req, res) => {
 }
 
 export const editProfile = async (req, res) => {
-  const connection = await db.getConnection()
   try {
-    await connection.beginTransaction()
-
     const { name, gender, phone, birth_date, birth_time, birth_place } = req.body
     const userID = req.user.id
 
-    const [users] = await connection.query(constants.CheckUserByID, [userID])
+    const users = await executeQuery(constants.CheckUserByID, [userID])
 
     const user = users[0]
     let main_element = user.main_element
     let baziResult = null
 
-    await connection.query(constants.editProfile, [
+    await executeQuery(constants.editProfile, [
       name ?? user.name,
       gender ?? user.gender,
       phone ?? user.phone,
@@ -288,7 +273,7 @@ export const editProfile = async (req, res) => {
       const favorable_elements = summary.favorableElements
       const unfavorable_elements = summary.unfavorableElements
 
-      await connection.query(constants.updateElementAfterEditProfile, [
+      await executeQuery(constants.updateElementAfterEditProfile, [
         main_element,
         JSON.stringify(favorable_elements),
         JSON.stringify(unfavorable_elements),
@@ -298,28 +283,24 @@ export const editProfile = async (req, res) => {
       baziResult = { main_element, favorable_elements, unfavorable_elements }
     }
 
-    await connection.commit()
     return res.status(200).json({ message: "Profile updated", bazi: baziResult })
   } catch (error) {
-    await connection.rollback()
     console.error("[EditProfile Error]", error)
     return res.status(500).json({ message: "Server error" })
-  } finally {
-    connection.release()
   }
 }
 
 export const prediction = async (req, res) => {
   try {
     const userID = req.user.id
-    const [checkUser] = await db.query(constants.checkUserAlready, [userID])
+    const checkUser = await executeQuery(constants.checkUserAlready, [userID])
     if (checkUser.length === 0) {
       return res.status(404).json({ message: "User not found" })
     }
 
     const today = new Date().toISOString().slice(0, 10)
 
-    const [existingPrediction] = await db.query(constants.checkPrediction, [userID, today])
+    const existingPrediction = await executeQuery(constants.checkPrediction, [userID, today])
 
     if (existingPrediction.length > 0) {
       return res.status(200).json({ message: existingPrediction[0].prediction_text })
@@ -438,12 +419,12 @@ export const prediction = async (req, res) => {
       response.data.choices?.[0]?.text ||
       "ขอโทษ ไม่สามารถให้คำทำนายได้ในขณะนี้"
 
-    const [predictionBefore] = await db.query(constants.checkPredictionBefor, [userID])
+    const predictionBefore = await executeQuery(constants.checkPredictionBefor, [userID])
 
     if (predictionBefore.length > 0) {
-      await db.query(constants.updatePrediction, [recommendation, today, userID])
+      await executeQuery(constants.updatePrediction, [recommendation, today, userID])
     } else {
-      await db.query(constants.insertPrediction, [userID, today, recommendation])
+      await executeQuery(constants.insertPrediction, [userID, today, recommendation])
     }
 
     return res.status(200).json({ message: recommendation })
@@ -460,8 +441,8 @@ export const menu = async (req, res) => {
     const limit = 12
     const offset = (page - 1) * limit
 
-    const [menu] = await db.query(constants.getMenuByUser, [userID, limit, offset])
-    const [rows] = await db.query(constants.getAllrowMenu, [userID])
+    const menu = await executeQuery(constants.getMenuByUser, [userID, limit, offset])
+    const rows = await executeQuery(constants.getAllrowMenu, [userID])
     const lastPage = Math.ceil(rows[0].total / limit);
     return res.status(200).json({
       lastPage,
@@ -481,8 +462,8 @@ export const findMenu = async (req, res) => {
     const { page } = req.body
     const limit = 12
     const offset = (page - 1) * limit
-    const [menu] = await db.query(constants.findMenuElementLike, [userID, userID, limit, offset])
-    const [rows] = await db.query(constants.getAllrowMenuElementLike, [restaurantId, userID])
+    const menu = await executeQuery(constants.findMenuElementLike, [userID, userID, limit, offset])
+    const rows = await executeQuery(constants.getAllrowMenuElementLike, [restaurantId, userID])
     const lastPage = Math.ceil(rows[0].total / limit);
     return res.status(200).json({
       lastPage,
@@ -510,10 +491,10 @@ export const filterMenu = async (req, res) => {
     const params = [restaurantId];
 
     if (Array.isArray(element) && element.length > 0) {
-      const conditions = element.map(el => `JSON_CONTAINS(m.element, ?)`);
+      const conditions = element.map(el => `m.element @> ?`);
       elementCondition = `AND (${conditions.join(" OR ")})`;
       element.forEach(el => {
-        params.push(JSON.stringify([el]));
+        params.push(`["${el}"]`);
       });
     }
 
@@ -523,14 +504,14 @@ export const filterMenu = async (req, res) => {
       .replace("/**element**/", elementCondition)
       .replace("/**price**/", price.toUpperCase());
 
-    const [menu] = await db.query(menuSql, [
+    const menu = await executeQuery(menuSql, [
       ...params,
       limit,
       offset,
     ]);
 
     const countSql = constants.filterMenuCount.replace("/**element**/", elementCondition);
-    const [rows] = await db.query(countSql, params);
+    const rows = await executeQuery(countSql, params);
     const lastPage = Math.ceil(rows[0].total / limit);
 
     return res.status(200).json({
@@ -547,7 +528,7 @@ export const createCoupon = async (req, res) => {
   try {
     const { promotion_id } = req.body
     const userID = req.user.id
-    const [promotion] = await db.query(constants.checkPromotion, [promotion_id])
+    const promotion = await executeQuery(constants.checkPromotion, [promotion_id])
 
     if (promotion.length === 0) {
       return res.status(400).json({ message: "Promotion is not active or does not exist" })
@@ -556,7 +537,7 @@ export const createCoupon = async (req, res) => {
     const randomBytes = crypto.randomBytes(4).toString("hex").toUpperCase()
     const code = `PROMO-${randomBytes}`
 
-    await db.query(constants.addCoupon, [userID, promotion_id, code])
+    await executeQuery(constants.addCoupon, [userID, promotion_id, code])
 
     return res.status(201).json({ message: "Coupon created", code })
   } catch (error) {
@@ -571,41 +552,30 @@ export const createCoupon = async (req, res) => {
 }
 
 export const useCoupon = async (req, res) => {
-  const connection = await db.getConnection()
-
   try {
-    await connection.query("BEGIN")
-
     const { code } = req.body
 
-    const [rows] = await connection.query(constants.checkCoupon, [code])
+    const rows = await executeQuery(constants.checkCoupon, [code])
 
     if (rows.length === 0) {
-      await connection.query("ROLLBACK")
       return res.status(400).json({ message: "Invalid or expired coupon" })
     }
 
     const coupon = rows[0]
 
     if (coupon.status !== "UNUSED") {
-      await connection.query("ROLLBACK")
       return res.status(400).json({ message: "Coupon already used" })
     }
 
-    await connection.query(constants.useCoupon, [coupon.coupon_id])
-
-    await connection.query("COMMIT")
+    await executeQuery(constants.useCoupon, [coupon.coupon_id])
 
     return res.status(200).json({
       message: "Coupon applied successfully",
       discount_value: coupon.discount_value,
     })
   } catch (error) {
-    await connection.query("ROLLBACK")
     console.error("[UseCoupon Error]", error)
     return res.status(500).json({ message: "Server error" })
-  } finally {
-    connection.release()
   }
 }
 

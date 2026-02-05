@@ -1,5 +1,5 @@
 import constants from "../lib/constants.js"
-import db from "../lib/db.js"
+import { executeQuery } from "../lib/db.js"
 import bcrypt from "bcrypt"
 import {
   generateAccessToken,
@@ -8,12 +8,11 @@ import {
   revokeAccessToken,
   revokeRefreshToken,
 } from "../lib/jwt.js"
-import { stringify } from "querystring"
 
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body
-    const [checkLogin] = await db.query(constants.adminLogin, [email])
+    const checkLogin = await executeQuery(constants.adminLogin, [email])
 
     if (checkLogin.length === 0) {
       return res.status(401).json({ message: "Invalid email or password" })
@@ -121,17 +120,17 @@ export const createRestaurant = async (req, res) => {
   try {
     const { name, email, password, phone, address } = req.body
   
-    const hashedPassword = await bcrypt.hash(stringify(password), 12)
+    const hashedPassword = await bcrypt.hash(String(password), 12)
     
-    const [checkEmail] = await db.query(constants.restaurantLogin,[email])
+    const checkEmail = await executeQuery(constants.restaurantLogin, [email])
     if(checkEmail.length > 0) {
-      res.status(400).json({ message: "Dulipecate Email"})
+      res.status(400).json({ message: "Duplicate Email"})
     } else{
-      await db.query(constants.adminRegisRestaurant, [name, email, hashedPassword, phone, address])
+      await executeQuery(constants.adminRegisRestaurant, [name, email, hashedPassword, phone, address])
       res.status(201).json({ message: "Restaurant created" })
     }
   } catch (error) {
-        console.error("[CreateRestauran Error]", error)
+        console.error("[CreateRestaurant Error]", error)
     return res.status(500).json({ message: "Server error" })
   }
 }

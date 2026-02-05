@@ -1,5 +1,5 @@
 import constants from "../lib/constants.js"
-import db from "../lib/db.js"
+import { executeQuery, executeQueryWithTransaction } from "../lib/db.js"
 import bcrypt from "bcrypt"
 import dotenv from "dotenv"
 import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js"
@@ -34,7 +34,7 @@ export const login = async (req, res) => {
           })
         }
     */
-    const [checkLogin] = await db.query(constants.restaurantLogin, [email])
+    const checkLogin = await executeQuery(constants.restaurantLogin, [email])
     if (checkLogin.length === 0) {
       return res.status(401).json({ message: "Invalid email or password" })
     }
@@ -85,7 +85,7 @@ export const preEdit = async (req, res) => {
   try {
     const restaurant_id = req.user.restaurantId
 
-    const [info] = await db.query(constants.CheckRestarant, [restaurant_id])
+    const info = await executeQuery(constants.CheckRestarant, [restaurant_id])
 
     return res.status(200).json({ info })
   } catch (error) {
@@ -104,7 +104,7 @@ export const editRestaurant = async (req, res) => {
       hashPassword = await bcrypt.hash(password, SALT_ROUNDS)
     }
 
-    await db.query(constants.editRestaurant, [name, email, hashPassword, status, restaurant_id])
+    await executeQuery(constants.editRestaurant, [name, email, hashPassword, status, restaurant_id])
 
     return res.status(200).json({ message: "Restaurant updated successfully" })
   } catch (error) {
@@ -125,8 +125,8 @@ export const menu = async (req, res) => {
     const limit = 12
     const offset = (page - 1) * limit
 
-    const [getMenu] = await db.query(constants.getMenu, [restaurant_id, limit, offset])
-    const [rows] = await db.query(constants.getAllrowMenuByRestaurant, [restaurant_id])
+    const getMenu = await executeQuery(constants.getMenu, [restaurant_id, limit, offset])
+    const rows = await executeQuery(constants.getAllrowMenuByRestaurant, [restaurant_id])
     const lastPage = Math.ceil(rows[0].total / limit);
     return res.status(200).json({
       lastPage,
@@ -151,7 +151,7 @@ export const addNewMenu = async (req, res) => {
     }
 
     if (!req.file) {
-      await db.query(constants.addNewMenu, [
+      await executeQuery(constants.addNewMenu, [
         restaurant_id,
         name,
         description,
@@ -171,7 +171,7 @@ export const addNewMenu = async (req, res) => {
 
       const image_public_id = uploadResult.public_id
 
-      await db.query(constants.addNewMenu, [
+      await executeQuery(constants.addNewMenu, [
         restaurant_id,
         name,
         description,
@@ -199,7 +199,7 @@ export const editMenu = async (req, res) => {
       return res.status(400).json({ message: "menuid is required" })
     }
 
-    const [findMenu] = await db.query(
+    const findMenu = await executeQuery(
       constants.findMenuByRestaurant,
       [menuid]
     )
@@ -227,7 +227,7 @@ export const editMenu = async (req, res) => {
       ? JSON.stringify(Array.isArray(element) ? element : [element])
       : null
 
-    await db.query(constants.editMenu, [
+    await executeQuery(constants.editMenu, [
       name,
       price,
       elementValue,
@@ -249,7 +249,7 @@ export const deleteMenuByRestaurant = async (req, res) => {
   try {
     const { menuid } = req.body
 
-    const [findMenu] = await db.query(
+    const findMenu = await executeQuery(
       constants.findMenuByRestaurant,
       [menuid]
     )
@@ -263,7 +263,7 @@ export const deleteMenuByRestaurant = async (req, res) => {
     if (publicId) {
       await deleteFromCloudinary(publicId)
     }
-    await db.query(constants.deleteMenu, [menuid])
+    await executeQuery(constants.deleteMenu, [menuid])
 
     return res.status(200).json({ message: "Delete Menu successfully" })
   } catch (error) {
@@ -273,25 +273,21 @@ export const deleteMenuByRestaurant = async (req, res) => {
 }
 
 export const createPromotion = async (req, res) => {
-  const connection = await db.getConnection()
-
   try {
-    await connection.query("BEGIN")
-
     const { element, description, discount_value, start_date, end_date } = req.body
 
-    const [menus] = await connection.query(constants.findMenuelelemet, [JSON.stringify(element)])
+    const menus = await executeQuery(constants.findMenuelelemet, [JSON.stringify(element)])
 
     if (menus.length === 0) {
-      await connection.query("ROLLBACK")
       return res.status(404).json({ message: "No menus match the specified elements" })
     }
 
-    const [groupResult] = await connection.query(constants.createGroupPromotion)
+    const groupResult = await executeQuery(constants.createGroupPromotion)
     const promotionGroupId = groupResult[0].nextGroup
 
-    for (const menu of menus) {
-      await connection.query(constants.createPromotion, [
+    const queries = menus.map(menu => ({
+      query: constants.createPromotion,
+      params: [
         promotionGroupId,
         menu.id,
         description || null,
@@ -299,10 +295,10 @@ export const createPromotion = async (req, res) => {
         start_date,
         end_date,
         "AVAILABLE",
-      ])
-    }
+      ]
+    }))
 
-    await connection.query("COMMIT")
+    await executeQueryWithTransaction(queries)
 
     return res.status(201).json({
       message: "Promotion created successfully",
@@ -310,11 +306,8 @@ export const createPromotion = async (req, res) => {
       menu_count: menus.length,
     })
   } catch (error) {
-    await connection.query("ROLLBACK")
     console.error("[CreatePromotion Error]", error)
     return res.status(500).json({ message: "Server error" })
-  } finally {
-    connection.release()
   }
 }
 
@@ -322,7 +315,7 @@ export const getAllPromotion = async (req, res) => {
   try {
     const restaurant_id = req.user.restaurantId
 
-    const [rows] = await db.query(
+    const rows = await executeQuery(
       constants.getAllPromotionByRestaurant,
       [restaurant_id]
     )
@@ -363,7 +356,7 @@ export const getAllPromotion = async (req, res) => {
 export const getPromotionGroup = async (req, res) => {
   try {
     const { group_id } = req.params
-    const [rows] = await db.query(constants.getPromotionGroup, [group_id])
+    const rows = await executeQuery(constants.getPromotionGroup, [group_id])
 
     if (rows.length === 0) {
       return res.status(404).json({ message: "Promotion group not found" })
@@ -380,14 +373,14 @@ export const updatePromotionGroup = async (req, res) => {
   try {
     const { group_id, start_date, end_date, status } = req.body
 
-    const result = await db.query(constants.updatePromotionGroup, [
+    const result = await executeQuery(constants.updatePromotionGroup, [
       start_date || null,
       end_date || null,
       status || null,
       group_id,
     ])
 
-    if (result.rowCount === 0) {
+    if (result.length === 0) {
       return res.status(404).json({ message: "Promotion group not found" })
     }
 
@@ -402,9 +395,9 @@ export const deletePromotionGroup = async (req, res) => {
   try {
     const { group_id } = req.params
 
-    const result = await db.query(constants.deletePromotionGroup, [group_id])
+    const result = await executeQuery(constants.deletePromotionGroup, [group_id])
 
-    if (result.rowCount === 0) {
+    if (result.length === 0) {
       return res.status(404).json({ message: "Promotion group not found" })
     }
 
@@ -422,14 +415,14 @@ export const restaurantUser = async (req, res) => {
     const limit = 12
     const offset = (page - 1) * limit
 
-    const [user] = await db.query(constants.findUser, [restaurant_id, limit, offset])
+    const user = await executeQuery(constants.findUser, [restaurant_id, limit, offset])
 
     if (user.length === 0) {
       return res.status(404).json({ message: "No users found in restaurant" })
     }
 
-    const [element] = await db.query(constants.coolactElement)
-    const [rows] = await db.query(constants.getAllrowUserByRestaurant, [restaurant_id])
+    const element = await executeQuery(constants.coolactElement)
+    const rows = await executeQuery(constants.getAllrowUserByRestaurant, [restaurant_id])
     const lastPage = Math.ceil(rows[0].total / limit);
     return res.status(200).json({
       lastPage,
