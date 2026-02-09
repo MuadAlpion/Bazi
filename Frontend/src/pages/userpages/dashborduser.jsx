@@ -270,17 +270,32 @@ function MenuModal({ menu, onClose }) {
             <img src={menu.image_url || FALLBACK_IMAGE} className="w-full h-full object-cover" />
           </div>
           <div className="p-6 md:p-12 md:w-1/2 space-y-6">
-            <div className="space-y-2">
-              <div className="flex gap-2">
+            <div className="space-y-3">
+              <div className="flex gap-2 flex-wrap">
                 {menu.element?.map(el => (
-                  <span key={el} className="text-[10px] font-black text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-100 uppercase tracking-widest">
+                  <span
+                    key={el}
+                    className="text-[10px] font-black text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-100 uppercase tracking-widest"
+                  >
                     ธาตุ{el}
                   </span>
                 ))}
               </div>
-              <h2 className="text-2xl md:text-4xl font-black text-slate-900 leading-tight">{menu.name}</h2>
-              <p className="text-2xl font-black text-amber-600">฿{menu.price}</p>
+
+              <h2 className="text-2xl md:text-4xl font-black text-slate-900 leading-tight">
+                {menu.name}
+              </h2>
+
+              <p className="text-2xl font-black text-amber-600">
+                ฿{menu.price}
+              </p>
+
+              {/* ✅ description */}
+              <p className="text-sm md:text-base text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
+                {menu.description || "ไม่มีรายละเอียดเพิ่มเติม"}
+              </p>
             </div>
+
 
 
 
