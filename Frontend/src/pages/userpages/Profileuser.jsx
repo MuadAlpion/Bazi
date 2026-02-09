@@ -8,6 +8,8 @@ import {
   Calendar, MapPin, Sparkles, Clock, Settings, ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import api from "../../utils/api";
+
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -67,11 +69,8 @@ function Profileuser() {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const res = await axios.post(
-        `${API_URL}/api/auth/detial`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await api.post("/api/auth/detial");
+
       const info = res.data?.info?.[0] || null;
       setProfile(info);
       if (info) {
@@ -109,9 +108,8 @@ function Profileuser() {
       setSaving(true);
       const formattedDate = `${thaiBirthDate.year}-${thaiBirthDate.month}-${thaiBirthDate.day.padStart(2, '0')}`;
       const payload = { ...form, birth_date: formattedDate, birth_time: form.birth_time.slice(0, 5) };
-      await axios.put(`${API_URL}/api/auth/editProfile`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.put("/api/auth/editProfile", payload);
+
       toast.success("ปรับปรุงข้อมูลเรียบร้อยแล้ว");
       setOpenEdit(false);
       fetchProfile();

@@ -114,7 +114,7 @@ const constants = {
 
   // Menu queries
   getMenu: `
-    SELECT id, name, price, element, image_url, status, created_at
+    SELECT id, name, price, element, description, image_url, status, created_at
     FROM menu
     WHERE restaurant_id = $1
     ORDER BY created_at DESC
@@ -124,13 +124,13 @@ const constants = {
   addNewMenu: "INSERT INTO menu (restaurant_id, name, description, price, element, image_url, status) VALUES ($1, $2, $3, $4, $5, $6, $7)",
 
   editMenu:
-    "UPDATE menu SET name = COALESCE($1, name), price = COALESCE($2, price), element = COALESCE($3, element), image_url = COALESCE($4, image_url), status = COALESCE($5, status), updated_at = CURRENT_TIMESTAMP WHERE id = $6",
+    "UPDATE menu SET name = COALESCE($1, name), price = COALESCE($2, price), element = COALESCE($3, element), image_url = COALESCE($4, image_url), status = COALESCE($5, status) ,description = COALESCE($6, description), updated_at = CURRENT_TIMESTAMP WHERE id = $7",
 
   deleteMenu: `
     DELETE FROM menu m WHERE m.id = $1
   `,
   getMenuByUser: `
-    SELECT m.id, m.name, m.price, m.element, m.image_url
+    SELECT m.id, m.name, m.description, m.price, m.element, m.image_url
     FROM menu m 
     JOIN users u ON m.restaurant_id = u.restaurant_id
     WHERE u.id = $1 AND m.status = 'AVAILABLE'
@@ -145,7 +145,7 @@ const constants = {
   `,
 
   findMenuElementLike: `
-SELECT m.id, m.name, m.price, m.element, m.image_url
+SELECT m.id, m.name,m.description, m.price, m.element, m.image_url
 FROM menu m
 WHERE m.restaurant_id = (
     SELECT restaurant_id FROM users WHERE id = $1
@@ -166,7 +166,7 @@ LIMIT $3 OFFSET $4;
   `,
 
   filterMenu: `
-SELECT m.id, m.name, m.price, m.element, m.image_url
+SELECT m.id, m.name,m.description, m.price, m.element, m.image_url
 FROM menu m
 WHERE m.restaurant_id = $1
   /**element**/
@@ -303,6 +303,26 @@ ORDER BY p.promotion_group_id, p.created_at DESC;
   adminRegisRestaurant: `
     INSERT INTO restaurants (name, email, password, phone, address) VALUES ($1, $2, $3, $4, $5)
   `,
+
+  adminGetAllRestaurant: `
+    SELECT
+  r.id AS restaurant_id,
+  r.name AS restaurant_name,
+  json_agg(
+    json_build_object(
+      'id', u.id,
+      'name', u.name,
+      'gender', u.gender,
+      'phone', u.phone,
+      'status', u.status
+    )
+  ) FILTER (WHERE u.id IS NOT NULL) AS members
+FROM restaurants r
+LEFT JOIN users u ON u.restaurant_id = r.id
+GROUP BY r.id, r.name
+ORDER BY r.id;
+
+  `
 }
 
 export default constants

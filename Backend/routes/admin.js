@@ -1,6 +1,6 @@
 import express from "express"
 import { authenticateToken,requireRole } from "../middleware/auth.js"
-import { login, refreshAccessToken, logout, createRestaurant } from '../controllers/admin.js'
+import { login, refreshAccessToken, logout, createRestaurant,getAllRestaurant } from '../controllers/admin.js'
 import { adminValidation, authValidation } from "../middleware/validation.js"
 import { asyncHandler } from "../middleware/errorHandler.js"
 const routes = express.Router()
@@ -19,6 +19,12 @@ routes.post(
   asyncHandler(createRestaurant)
 )
 
+routes.get(
+  "/admin/restaurant",
+  authenticateToken,
+  requireRole("ADMIN"),
+  asyncHandler(getAllRestaurant)
+)
 routes.post(
   "/admin/refresh",
   asyncHandler(refreshAccessToken)

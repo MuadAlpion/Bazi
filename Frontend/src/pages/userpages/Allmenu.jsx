@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Sparkles, ArrowRight, ChevronRight, User, X, Filter, ArrowUpDown, Utensils, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import useUser from "../../store/useUser";
+import api from "../../utils/api";
+
 
 const API_URL = import.meta.env.VITE_API_URL;
 const FALLBACK_IMAGE = "https://t4.ftcdn.net/jpg/05/72/86/19/360_F_572861950_RfPLbfdWyCYB9B9vCGWuak9UFA0pN5Qo.jpg";
@@ -39,28 +41,24 @@ export default function Allmenu() {
   const fetchFilteredMenus = async () => {
     try {
       setLoadingMenus(true);
-      const res = await fetch(`${API_URL}/api/auth/menu/filter`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          element: selectedElements,
-          price: priceSort,
-          page: page,
-        }),
+
+      const res = await api.post("/api/auth/menu/filter", {
+        element: selectedElements,
+        price: priceSort,
+        page: page,
       });
 
-      const data = await res.json();
-      setMenus(data.menu || []);
-      setLastPage(data.lastPage || 1);
+      setMenus(res.data.menu || []);
+      setLastPage(res.data.lastPage || 1);
+
     } catch (err) {
+      console.error("fetchFilteredMenus error:", err);
       setMenus([]);
     } finally {
       setLoadingMenus(false);
     }
   };
+
 
   const toggleElement = (el) => {
     setPage(1); // รีเซ็ตหน้าเป็น 1 เสมอเมื่อเปลี่ยนตัวกรอง
@@ -132,7 +130,7 @@ function HeaderSection({ user }) {
 function FilterBar({ selectedElements, toggleElement, priceSort, setPriceSort }) {
   return (
     <div className="bg-white rounded-[2rem] p-4 md:p-6 shadow-xl shadow-red-900/5 border border-amber-100 flex flex-col lg:flex-row lg:items-center gap-6">
-      
+
       {/* Element Filters */}
       <div className="flex flex-wrap gap-2 flex-grow">
         {ELEMENTS.map((el) => {
@@ -142,8 +140,8 @@ function FilterBar({ selectedElements, toggleElement, priceSort, setPriceSort })
               key={el}
               onClick={() => toggleElement(el)}
               className={`px-5 py-2 rounded-full font-black text-xs md:text-sm transition-all border-2 
-                ${isActive 
-                  ? "bg-red-900 border-red-900 text-amber-400 shadow-lg scale-105" 
+                ${isActive
+                  ? "bg-red-900 border-red-900 text-amber-400 shadow-lg scale-105"
                   : "bg-white border-slate-100 text-slate-400 hover:border-amber-200 hover:text-red-700"}`}
             >
               ธาตุ{el}
@@ -156,17 +154,15 @@ function FilterBar({ selectedElements, toggleElement, priceSort, setPriceSort })
       <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
         <button
           onClick={() => setPriceSort("asc")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs transition-all ${
-            priceSort === "asc" ? "bg-white shadow-sm text-red-700" : "text-slate-400"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs transition-all ${priceSort === "asc" ? "bg-white shadow-sm text-red-700" : "text-slate-400"
+            }`}
         >
           <ArrowUpDown size={14} /> ราคา: น้อยไปมาก
         </button>
         <button
           onClick={() => setPriceSort("desc")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs transition-all ${
-            priceSort === "desc" ? "bg-white shadow-sm text-red-700" : "text-slate-400"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs transition-all ${priceSort === "desc" ? "bg-white shadow-sm text-red-700" : "text-slate-400"
+            }`}
         >
           <ArrowUpDown size={14} className="rotate-180" /> ราคา: มากไปน้อย
         </button>
@@ -289,21 +285,34 @@ function MenuModal({ menu, onClose }) {
             <img src={menu.image_url || FALLBACK_IMAGE} className="w-full h-full object-cover" />
           </div>
           <div className="p-8 md:p-12 md:w-1/2 space-y-6 flex flex-col justify-center">
-            <div className="space-y-2">
-               <div className="flex gap-2">
+            <div className="space-y-3">
+              <div className="flex gap-2 flex-wrap">
                 {menu.element?.map(el => (
-                  <span key={el} className="px-3 py-1 bg-red-50 text-red-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">
+                  <span
+                    key={el}
+                    className="text-[10px] font-black text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-100 uppercase tracking-widest"
+                  >
                     ธาตุ{el}
                   </span>
                 ))}
               </div>
-              <h2 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter leading-tight">{menu.name}</h2>
-              <p className="text-2xl md:text-3xl font-black text-amber-600">฿{menu.price}</p>
+
+              <h2 className="text-2xl md:text-4xl font-black text-slate-900 leading-tight">
+                {menu.name}
+              </h2>
+
+              <p className="text-2xl font-black text-amber-600">
+                ฿{menu.price}
+              </p>
+
+              {/* ✅ description */}
+              <p className="text-sm md:text-base text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
+                {menu.description || "ไม่มีรายละเอียดเพิ่มเติม"}
+              </p>
             </div>
-            
-            <p className="text-slate-500 leading-relaxed text-sm md:text-base">
-              เมนูมงคลที่ช่วยปรับสมดุลธาตุในร่างกาย เสริมดวงชะตาและสร้างพลังบวกให้แก่คุณในมื้ออาหารที่แสนพิเศษนี้
-            </p>
+
+
+
 
             <button onClick={onClose} className="w-full py-4 bg-red-900 text-amber-400 rounded-2xl font-black text-lg transition-all shadow-xl shadow-red-900/20 active:scale-95">
               รับทราบเมนูมงคล

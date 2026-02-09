@@ -10,14 +10,14 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body
     const result = await adminService.login(email, password)
-    
+
     res.cookie('refreshToken', result.tokens.refreshToken, {
       httpOnly: true,
       sameSite: 'Lax',
       secure: false,
       path: '/api/admin',
     })
-    
+
     return res.status(200).json({
       message: 'Login successful',
       user: {
@@ -27,6 +27,9 @@ export const login = async (req, res) => {
       tokens: result.tokens,
     })
   } catch (error) {
+    if (error.message === 'Invalid email or password') {
+      return res.status(401).json({ message: error.message })
+    }
     console.error('[Admin Login Error]', error)
     return res.status(500).json({ message: 'Server error' })
   }
@@ -74,9 +77,9 @@ export const logout = async (req, res) => {
     const refreshToken = req.cookies.refreshToken
     const authHeader = req.headers.authorization
     const accessToken = authHeader && authHeader.split(' ')[1]
-    
+
     await adminService.logout(accessToken, refreshToken)
-    
+
     return res.status(200).json({
       message: 'Logged out successfully',
     })
@@ -91,10 +94,20 @@ export const createRestaurant = async (req, res) => {
     const result = await adminService.createRestaurant(req.body)
     res.status(201).json({ message: 'Restaurant created' })
   } catch (error) {
-    console.error('[CreateRestaurant Error]', error)
     if (error.message === 'Duplicate Email') {
       return res.status(400).json({ message: 'Duplicate Email' })
     }
+    console.error('[CreateRestaurant Error]', error)
+    return res.status(500).json({ message: 'Server error' })
+  }
+}
+
+export const getAllRestaurant = async (req, res) => {
+  try {
+    const result = await adminService.getAllRestaurant()
+    return res.status(200).message.json({result})
+  } catch (error) {
+    console.error('[getAllRestaurant Error]', error)
     return res.status(500).json({ message: 'Server error' })
   }
 }

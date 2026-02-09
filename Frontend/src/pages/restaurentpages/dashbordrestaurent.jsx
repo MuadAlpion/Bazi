@@ -42,6 +42,7 @@ function DashboardRestaurant() {
     price: "",
     element: [],
     status: "AVAILABLE",
+    description: "",
   })
 
   const [image, setImage] = useState(null)
@@ -88,6 +89,7 @@ function DashboardRestaurant() {
       formData.append("name", form.name.trim())
       formData.append("price", Number(form.price))
       formData.append("status", form.status)
+      formData.append("description", form.description)
       form.element.forEach((el) => formData.append("element[]", el))
       if (image) formData.append("image", image)
 
@@ -143,11 +145,20 @@ function DashboardRestaurant() {
     }))
   }
 
-  const openAddModal = () => {
-    setEditMode(false)
-    setForm({ name: "", price: "", element: [], status: "AVAILABLE" })
-    setImagePreview(null); setImage(null); setOpenModal(true)
-  }
+const openAddModal = () => {
+  setEditMode(false)
+  setForm({
+    name: "",
+    price: "",
+    element: [],
+    status: "AVAILABLE",
+    description: "",   // ✅ เพิ่มบรรทัดนี้
+  })
+  setImagePreview(null)
+  setImage(null)
+  setOpenModal(true)
+}
+
 
   const openEditModal = (menu) => {
     setEditMode(true)
@@ -158,6 +169,7 @@ function DashboardRestaurant() {
       price: menu.price || "",
       element: menu.element || [],
       status: menu.status || "AVAILABLE",
+      description: menu.description || "",
     })
     setImagePreview(menu.image_url ? (menu.image_url.startsWith("http") ? menu.image_url : `${API_URL}${menu.image_url}`) : null)
     setOpenModal(true)
@@ -404,9 +416,17 @@ function DashboardRestaurant() {
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">คำอธิบาย</label>
-                    <input type="text" className="w-full bg-slate-50 border-2 border-transparent focus:border-amber-400 focus:bg-white rounded-2xl px-6 py-4 text-slate-800 font-bold outline-none" placeholder="รายละเอียดธาตุเมนูของคุณ" value={form.description} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                  </div>
+  <textarea
+  rows={3}
+  className="w-full bg-slate-50 border-2 border-transparent focus:border-amber-400 focus:bg-white rounded-2xl px-6 py-4 text-slate-800 font-bold outline-none resize-none"
+  placeholder="รายละเอียดธาตุเมนูของคุณ"
+  value={form.description}
+  onChange={(e) => setForm({ ...form, description: e.target.value })}
+  required
+/>
+
+</div>
+
 
                   <div className="flex gap-4 pt-10 border-t border-slate-50">
                     {editMode && (

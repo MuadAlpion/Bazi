@@ -51,6 +51,10 @@ class AdminService {
     return await this.adminRepo.createRestaurant(restaurantData)
   }
   
+  async getAllRestaurant (){
+    return await this.adminRepo.getAllRestaurantByAdmin
+  }
+
   async logout(accessToken, refreshToken) {
     if (accessToken) {
       await revokeAccessToken(accessToken, 'user_logout')

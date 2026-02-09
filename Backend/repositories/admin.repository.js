@@ -15,6 +15,10 @@ class AdminRepository {
   async checkRestaurantExists(email) {
     return await executeQuery(constants.restaurantLogin, [email])
   }
+
+  async getAllRestaurantByAdmin(){
+    return await executeQuery(constants.adminGetAllRestaurant)
+  }
 }
 
 export default AdminRepository
