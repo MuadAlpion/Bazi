@@ -17,9 +17,6 @@ import Dashbrodadmin from '../pages/adminpages/dashbordadmin';
 //admin
 import Layoutadmin from '../layout/layoutadmin';
 import Loginadmin from '../pages/loginadmin';
-import Allrestaurent from '../pages/adminpages/allrestaurent';
-import Alluser from '../pages/adminpages/alluser';
-import Profileadmin from '../pages/adminpages/profileadmin';
 import Logoutuser from '../pages/logoutuser';
 import Registeruser from '../pages/registeruser';
 import Goodbye from '../pages/Goodbye';
@@ -65,10 +62,7 @@ const router = createBrowserRouter([
         path: "admin",
         element: <Layoutadmin />,
         children: [
-            { index: true, element: <Dashbrodadmin /> },
-            { path: "allrestaurent", element: <Allrestaurent /> },
-            { path: "alluser", element: <Alluser /> },
-            { path: "profileadmin", element: <Profileadmin /> },
+            { index: true, element: <Dashbrodadmin /> }
 
         ],
     }

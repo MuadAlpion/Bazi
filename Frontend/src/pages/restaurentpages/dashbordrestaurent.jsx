@@ -438,12 +438,12 @@ function DashboardRestaurant() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-amber-100 rounded-lg text-amber-600"><Ticket size={20} /></div>
-              <h2 className="text-xl md:text-2xl font-black text-slate-800">คูปองและส่วนลด</h2>
+              <h2 className="text-xl md:text-2xl font-black text-white">คูปองและส่วนลด</h2>
             </div>
             {promotions.length > 5 && (
               <button
                 onClick={() => setShowAllPromosModal(true)}
-                className="text-sm font-black text-red-700 hover:text-red-900 flex items-center gap-1 transition-colors self-end sm:self-auto"
+                className="text-sm font-black text-white hover:text-red-500 flex items-center gap-1 transition-colors self-end sm:self-auto"
               >
                 ดูทั้งหมด ({promotions.length})
               </button>
