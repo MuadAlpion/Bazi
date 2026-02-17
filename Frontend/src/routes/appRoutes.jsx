@@ -20,6 +20,7 @@ import Loginadmin from '../pages/loginadmin';
 import Logoutuser from '../pages/logoutuser';
 import Registeruser from '../pages/registeruser';
 import Goodbye from '../pages/Goodbye';
+import ScannerPage from '../pages/ScannerPage';
 
 const router = createBrowserRouter([
     {
@@ -40,6 +41,10 @@ const router = createBrowserRouter([
     {
         path: "goodbye",
         element: <Goodbye />,
+    },
+    {
+        path: "scanner",
+        element: <ScannerPage />,
     },
     {
         path: "user",

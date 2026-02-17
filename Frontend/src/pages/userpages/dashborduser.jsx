@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import useUser from "../../store/useUser";
 import api from "../../utils/api";
+import { io } from "socket.io-client";
 
 const FALLBACK_IMAGE = "https://res.cloudinary.com/dqqkzucir/image/upload/v1770964754/depositphotos_289179526-stock-photo-white-torn-rolled-paper-light_drbebs.webp";
 
@@ -59,15 +60,19 @@ export default function Dashboarduser() {
     }
   };
 
+  // ✅ return ข้อมูลกลับมาด้วย เพื่อให้ MenuModal นำไปใช้ต่อได้
   const fetchLikedMenus = async (pageNum) => {
     try {
       setLoadingMenus(true);
       const res = await api.post("/api/auth/menu/like", { page: pageNum });
-      setLikedMenus(res.data.menu || []);
+      const menus = res.data.menu || [];
+      setLikedMenus(menus);
       setLastPage(res.data.lastPage || 1);
+      return menus;
     } catch (err) {
       console.error(err);
       setLikedMenus([]);
+      return [];
     } finally {
       setLoadingMenus(false);
     }
@@ -107,10 +112,13 @@ export default function Dashboarduser() {
 
       <AnimatePresence>
         {selectedMenu && (
-          <MenuModal 
-            menu={selectedMenu} 
-            onClose={() => setSelectedMenu(null)} 
-            refreshData={() => fetchLikedMenus(page)}
+          <MenuModal
+            menu={selectedMenu}
+            onClose={() => setSelectedMenu(null)}
+            // ✅ ส่ง fetchLikedMenus, page, setSelectedMenu ให้ Modal ใช้รีเฟรชและอัปเดตตัวเอง
+            fetchLikedMenus={fetchLikedMenus}
+            page={page}
+            setSelectedMenu={setSelectedMenu}
           />
         )}
       </AnimatePresence>
@@ -146,7 +154,7 @@ function ElementSection({ elementKey }) {
   if (!elementKey) return null;
   const el = elementInfo[elementKey];
   return (
-    <motion.div 
+    <motion.div
       whileHover={{ y: -5 }}
       className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 h-full flex flex-col items-center relative overflow-hidden group"
     >
@@ -158,7 +166,7 @@ function ElementSection({ elementKey }) {
         <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">ธาตุประจำตัวคุณ</span>
         <h2 className="text-2xl font-black text-slate-800 mt-1">ธาตุ{el.nameTh}</h2>
         <div className="flex gap-1 justify-center mt-3">
-            {[1,2,3,4,5].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= 4 ? el.color : 'bg-slate-200'}`} />)}
+          {[1, 2, 3, 4, 5].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= 4 ? el.color : 'bg-slate-200'}`} />)}
         </div>
       </div>
     </motion.div>
@@ -169,11 +177,11 @@ function PredictionSection({ prediction, loading }) {
   return (
     <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 h-full flex flex-col justify-center relative overflow-hidden">
       <div className="absolute top-0 right-0 p-8 opacity-5">
-         <Sparkles size={120} />
+        <Sparkles size={120} />
       </div>
       <div className="flex items-center gap-2 mb-6">
         <div className="bg-amber-100 p-2 rounded-xl text-amber-600">
-           <Zap size={18} fill="currentColor" />
+          <Zap size={18} fill="currentColor" />
         </div>
         <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Daily Blessing</span>
       </div>
@@ -216,20 +224,20 @@ function RecommendedMenusSection({ menus, loading, page, lastPage, setPage, setS
       {lastPage > 1 && (
         <div className="flex justify-center pt-4">
           <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
-            <button 
-                disabled={page === 1} 
-                onClick={() => setPage(p => p - 1)} 
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 disabled:opacity-30 transition-colors"
+            <button
+              disabled={page === 1}
+              onClick={() => setPage(p => p - 1)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 disabled:opacity-30 transition-colors"
             >
-                <ChevronRight size={20} className="rotate-180" />
+              <ChevronRight size={20} className="rotate-180" />
             </button>
             <span className="px-4 text-sm font-bold text-slate-700">หน้า {page} จาก {lastPage}</span>
-            <button 
-                disabled={page === lastPage} 
-                onClick={() => setPage(p => p + 1)} 
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 disabled:opacity-30 transition-colors"
+            <button
+              disabled={page === lastPage}
+              onClick={() => setPage(p => p + 1)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 disabled:opacity-30 transition-colors"
             >
-                <ChevronRight size={20} />
+              <ChevronRight size={20} />
             </button>
           </div>
         </div>
@@ -243,16 +251,16 @@ function MenuCard({ menu, onClick }) {
   const bestPrice = hasPromo ? Math.min(...menu.promotions.map(p => parseFloat(p.total))) : menu.price;
 
   return (
-    <motion.div 
+    <motion.div
       whileHover={{ y: -8 }}
-      whileTap={{ scale: 0.98 }} 
-      onClick={onClick} 
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
       className="group cursor-pointer bg-white rounded-[2rem] shadow-sm hover:shadow-xl hover:shadow-red-500/5 transition-all duration-500 overflow-hidden border border-slate-100 flex flex-col h-full relative"
     >
       <div className="relative aspect-[4/5] overflow-hidden">
         <img src={menu.image_url || FALLBACK_IMAGE} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-        
+
         <div className="absolute top-4 left-4 flex flex-wrap gap-1.5">
           {menu.element?.map(el => (
             <span key={el} className="px-2.5 py-1 bg-white/90 backdrop-blur-md text-slate-900 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm">
@@ -260,95 +268,120 @@ function MenuCard({ menu, onClick }) {
             </span>
           ))}
         </div>
-        
+
         {hasPromo && (
-            <div className="absolute top-4 right-4 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 rounded-full shadow-lg">
-                OFFER
-            </div>
+          <div className="absolute top-4 right-4 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 rounded-full shadow-lg">
+            OFFER
+          </div>
         )}
 
         <div className="absolute bottom-4 right-4 translate-y-10 group-hover:translate-y-0 transition-transform duration-500">
-            <div className="bg-white p-3 rounded-full shadow-xl text-red-600">
-                <ArrowRight size={20} />
-            </div>
+          <div className="bg-white p-3 rounded-full shadow-xl text-red-600">
+            <ArrowRight size={20} />
+          </div>
         </div>
       </div>
 
       <div className="p-5 space-y-2">
         <h3 className="text-base font-bold text-slate-800 line-clamp-1 group-hover:text-red-600 transition-colors">{menu.name}</h3>
         <div className="flex items-center gap-2">
-           <span className="text-xl font-black text-slate-900">฿{bestPrice}</span>
-           {hasPromo && <span className="text-xs text-slate-400 line-through">฿{menu.price}</span>}
+          <span className="text-xl font-black text-slate-900">฿{bestPrice}</span>
+          {hasPromo && <span className="text-xs text-slate-400 line-through">฿{menu.price}</span>}
         </div>
       </div>
     </motion.div>
   );
 }
 
-function MenuModal({ menu: initialMenu, onClose, refreshData }) {
+// --- ส่วนของ MenuModal แบบคลีน (วางแทนที่อันเก่าได้เลย) ---
+
+function MenuModal({ menu: initialMenu, onClose, fetchLikedMenus, page, setSelectedMenu }) {
   const [menuData, setMenuData] = useState(initialMenu);
   const [claimingId, setClaimingId] = useState(null);
-  
-  // --- ส่วนที่เพิ่มใหม่: เก็บสถานะว่าคูปองไหนถูกสั่งให้โชว์ QR ---
   const [showQRMap, setShowQRMap] = useState({});
+  const [isUsedSuccess, setIsUsedSuccess] = useState(false);
 
   useEffect(() => {
     setMenuData(initialMenu);
+    setShowQRMap({});
+    setIsUsedSuccess(false);
   }, [initialMenu]);
 
-  const hasPromo = (menuData.canUsePromotion === true || menuData.canUsePromotion === 1) && 
-                   Array.isArray(menuData.promotions) && menuData.promotions.length > 0;
-  
-  const bestPrice = hasPromo 
-    ? Math.min(...menuData.promotions.map(p => parseFloat(p.total))) 
-    : menuData.price;
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_API_URL);
+
+    socket.on("couponUpdated", async (data) => {
+      console.log("Real-time update received:", data);
+
+      const isThisCouponUsed = menuData.promotions?.some(
+        (p) => String(p.promotion_id) === String(data.coupon_id)
+      );
+
+      if (isThisCouponUsed && data.status === "USED") {
+        setIsUsedSuccess(true);
+        const freshMenus = await fetchLikedMenus(page);
+        const freshMenu = freshMenus.find(m => m.id === menuData.id);
+        if (freshMenu) {
+          setMenuData(freshMenu);
+          setSelectedMenu(freshMenu);
+        }
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [menuData, page, fetchLikedMenus, setSelectedMenu]);
+
+  const hasPromo = (menuData.canUsePromotion === true || menuData.canUsePromotion === 1) &&
+    Array.isArray(menuData.promotions) && menuData.promotions.length > 0;
 
   const handleClaimCoupon = async (promoId) => {
     try {
       setClaimingId(promoId);
-      const res = await api.post("/api/auth/coupon/add", { promotion_id: promoId });
-      
-      const newCode = res.data.coupon?.coupon_code || res.data.coupon_code || (res.data.data?.coupon_code);
-
-      if (newCode) {
-        setMenuData(prev => ({
-          ...prev,
-          promotions: prev.promotions.map(p => 
-            p.promotion_id === promoId ? { ...p, coupon_code: newCode } : p
-          )
-        }));
-
-        if (refreshData) refreshData();
-        
-        // แจ้งเตือนผู้ใช้เล็กน้อย
-        // alert("รับคูปองสำเร็จ! คลิกที่ปุ่ม 'แสดง QR Code' เพื่อใช้งาน");
+      await api.post("/api/auth/coupon/add", { promotion_id: promoId });
+      const freshMenus = await fetchLikedMenus(page);
+      const freshMenu = freshMenus.find(m => m.id === menuData.id);
+      if (freshMenu) {
+        setMenuData(freshMenu);
+        setSelectedMenu(freshMenu);
       }
+      setShowQRMap(prev => ({ ...prev, [promoId]: true }));
     } catch (err) {
       console.error("Claim error:", err);
       alert(err.response?.data?.message || "เกิดข้อผิดพลาดในการรับคูปอง");
-    } finally { 
-      setClaimingId(null); 
+    } finally {
+      setClaimingId(null);
     }
   };
 
-  // --- ฟังก์ชันสำหรับเปิด/ปิดการแสดง QR ---
   const toggleQR = (promoId) => {
-    setShowQRMap(prev => ({
-      ...prev,
-      [promoId]: !prev[promoId]
-    }));
+    setShowQRMap(prev => ({ ...prev, [promoId]: !prev[promoId] }));
   };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" />
 
-      <motion.div 
+      <motion.div
         layoutId={`modal-${menuData.id}`}
-        initial={{ scale: 0.9, opacity: 0, y: 20 }} 
-        animate={{ scale: 1, opacity: 1, y: 0 }} 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
         className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden relative shadow-2xl z-10 max-h-[90vh] flex flex-col md:flex-row"
       >
+        <AnimatePresence>
+          {isUsedSuccess && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center text-center p-10">
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6">
+                <CheckCircle2 size={56} />
+              </motion.div>
+              <h3 className="text-3xl font-black text-slate-900">ใช้คูปองสำเร็จ!</h3>
+              <p className="text-slate-500 mt-2 text-lg">รายการนี้ได้รับการยืนยันเรียบร้อยแล้ว</p>
+              <button onClick={onClose} className="mt-8 bg-slate-900 text-white px-12 py-4 rounded-2xl font-bold hover:bg-emerald-600 transition-colors shadow-lg">ตกลง</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <button onClick={onClose} className="absolute top-6 right-6 z-20 bg-slate-100 p-2.5 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all">
           <X size={20} />
         </button>
@@ -361,40 +394,38 @@ function MenuModal({ menu: initialMenu, onClose, refreshData }) {
           <div className="space-y-6">
             <div className="space-y-2">
               <h2 className="text-3xl font-black text-slate-900 leading-tight">{menuData.name}</h2>
-              <div className="flex items-center gap-3">
-                <span className="text-3xl font-black text-red-600">฿{bestPrice}</span>
-                {hasPromo && <span className="text-lg text-slate-300 line-through font-bold italic">฿{menuData.price}</span>}
+              <div className="flex items-center gap-2">
+                <span className="text-3xl font-black text-slate-900">฿{menuData.price}</span>
+                <span className="text-sm text-slate-400 font-bold uppercase tracking-wider">ราคาปกติ</span>
               </div>
             </div>
 
-            {hasPromo && (
+            {hasPromo ? (
               <div className="space-y-4 pt-4 border-t border-slate-100">
                 <h4 className="font-bold text-slate-800 flex items-center gap-2">
                   <Ticket size={18} className="text-red-600" /> สิทธิพิเศษสำหรับคุณ
                 </h4>
-                
+
                 <div className="space-y-3">
                   {menuData.promotions.map((promo) => {
                     const isClaimed = !!promo.coupon_code;
                     const isShowingQR = showQRMap[promo.promotion_id];
 
                     return (
-                      <div key={promo.promotion_id} className="bg-slate-50 p-5 rounded-[2rem] border border-slate-200/60 flex flex-col gap-4 relative overflow-hidden group">
+                      <div key={promo.promotion_id} className="bg-slate-50 p-5 rounded-[2rem] border border-slate-200/60 flex flex-col gap-4 relative group">
                         <div className="flex justify-between items-start gap-4">
                           <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xl font-black text-red-600">฿{promo.total}</span>
+                              <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold uppercase">Discounted</span>
+                            </div>
                             <p className="font-bold text-slate-900 leading-tight group-hover:text-red-600 transition-colors">{promo.name}</p>
                             <p className="text-[11px] text-slate-500 mt-1">{promo.description}</p>
                           </div>
 
-                          {/* --- แสดง QR Code เมื่อกดปุ่ม 'แสดง QR' เท่านั้น --- */}
                           <AnimatePresence>
                             {isClaimed && isShowingQR && (
-                              <motion.div 
-                                initial={{ scale: 0, opacity: 0 }} 
-                                animate={{ scale: 1, opacity: 1 }}
-                                exit={{ scale: 0, opacity: 0 }}
-                                className="bg-white p-2 rounded-2xl shadow-md border border-red-100 shrink-0"
-                              >
+                              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} className="bg-white p-2 rounded-2xl shadow-md border border-red-100 shrink-0">
                                 <QRCodeSVG value={promo.coupon_code} size={80} />
                               </motion.div>
                             )}
@@ -403,42 +434,36 @@ function MenuModal({ menu: initialMenu, onClose, refreshData }) {
 
                         <div className="flex flex-col gap-2 pt-2 border-t border-dashed border-slate-200">
                           {!isClaimed ? (
-                            // 1. ปุ่มรับคูปอง (ถ้ายังไม่มีรหัส)
                             <button
                               disabled={claimingId === promo.promotion_id}
                               onClick={() => handleClaimCoupon(promo.promotion_id)}
-                              className="w-full bg-slate-900 hover:bg-red-600 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+                              className="w-full bg-slate-900 hover:bg-red-600 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-60"
                             >
-                              {claimingId === promo.promotion_id ? <Loader2 size={16} className="animate-spin" /> : <Ticket size={16} />}
-                              รับคูปองส่วนลด
+                              {claimingId === promo.promotion_id ? <><Loader2 size={16} className="animate-spin" /> กำลังรับคูปอง...</> : <><Ticket size={16} /> รับส่วนลดเหลือ ฿{promo.total}</>}
                             </button>
                           ) : (
-                            // 2. ปุ่มกดเพื่อดู QR Code (ถ้ามีรหัสแล้ว)
                             <button
                               onClick={() => toggleQR(promo.promotion_id)}
-                              className={`w-full py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                                isShowingQR ? 'bg-slate-200 text-slate-600' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-100'
-                              }`}
+                              className={`w-full py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${isShowingQR ? 'bg-slate-200 text-slate-600' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-100'}`}
                             >
                               {isShowingQR ? <X size={16} /> : <Zap size={16} />}
                               {isShowingQR ? 'ปิดหน้าจอ QR' : 'แสดง QR Code เพื่อใช้งาน'}
                             </button>
                           )}
-                          
-                          {isClaimed && (
-                            <div className="text-center text-[10px] font-black text-emerald-600 mt-1">
-                              CODE: {promo.coupon_code}
-                            </div>
-                          )}
+                          {isClaimed && <div className="text-center text-[10px] font-black text-emerald-600 mt-1 uppercase">CODE: {promo.coupon_code}</div>}
                         </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
+            ) : (
+              <div className="py-10 text-center border-t border-slate-100">
+                <p className="text-slate-400 font-medium italic">ไม่มีโปรโมชั่นสำหรับเมนูนี้ในขณะนี้</p>
+              </div>
             )}
-            
-            <button onClick={onClose} className="w-full py-4 text-slate-400 font-bold text-xs hover:text-red-600 transition-all uppercase tracking-widest">
+
+            <button onClick={onClose} className="w-full py-4 text-slate-400 font-bold text-[10px] hover:text-red-600 transition-all uppercase tracking-[0.2em]">
               กลับสู่หน้าแดชบอร์ด
             </button>
           </div>
