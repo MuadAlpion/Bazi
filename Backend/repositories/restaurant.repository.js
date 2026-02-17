@@ -60,8 +60,8 @@ class RestaurantRepository {
     return await executeQuery(constants.deleteMenu, [menuId])
   }
 
-  async findMenuByElement(client, element) {
-    const { rows } = await client.query(constants.findMenuelelemet, [JSON.stringify(element)]);
+  async findMenuByElement(client, element, restaurantId) {
+    const { rows } = await client.query(constants.findMenuelelemet, [JSON.stringify(element),restaurantId]);
     return rows;
   }
 

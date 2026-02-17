@@ -124,6 +124,10 @@ class AuthRepository {
     return { menu, rows }
   }
 
+  async checkPromotion(promotionId) {
+    return await executeQuery(constants.checkPromotion, [promotionId])
+  }
+
   async checkUserCoupon(userId, promotionId) {
     return await executeQuery(constants.checkUserCoupon, [userId, promotionId])
   }

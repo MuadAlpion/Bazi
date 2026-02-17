@@ -455,7 +455,8 @@ WHERE m.restaurant_id = $1
     SELECT id, name, price
     FROM menu
     WHERE element::jsonb @> $1::jsonb
-      AND status = 'AVAILABLE'
+      AND status = 'AVAILABLE' 
+      AND restaurant_id  = $2
   `,
 
   // Promotion queries
@@ -564,11 +565,14 @@ RETURNING id;
   c.id as coupon_id,
   c.status,
   c.code,
+  u.restaurant_id,
   pg.discount_value,
   pg.start_date,
   pg.end_date,
   pg.status as promotion_status
 FROM coupons c
+JOIN users u
+  ON c.user_id = u.id
 JOIN promotions p 
   ON c.promotion_id = p.id
 JOIN promotion_groups pg 
@@ -578,9 +582,12 @@ LIMIT 1
   `,
 
   useCoupon: `
-    UPDATE coupons
-    SET status = 'USED', used_at = CURRENT_TIMESTAMP
-    WHERE id = $1
+UPDATE coupons
+SET status = 'USED',
+    used_at = CURRENT_TIMESTAMP
+WHERE id = $1
+AND status = 'UNUSED'
+RETURNING id
   `,
 
   adminLogin: `
@@ -621,15 +628,15 @@ ORDER BY r.id;
   WHERE id = $7
   `,
 
-  adminDeleteUser:`
+  adminDeleteUser: `
   DELETE FROM users WHERE id = $1
   `,
 
-  checkRestaurant:`
+  checkRestaurant: `
   SELECT * FROM restaurants WHERE id = $1
   `,
 
-  deleteRestaurantByAdmin:`
+  deleteRestaurantByAdmin: `
   DELETE FROM restaurants WHERE id = $1
   `,
 }

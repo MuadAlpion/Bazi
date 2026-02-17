@@ -234,7 +234,7 @@ class AuthService {
   }
 
   async prediction(userId) {
-    
+
     const checkUser = await this.authRepo.checkUserExists(userId)
     if (checkUser.length === 0) {
       throw new Error('User not found')
@@ -449,6 +449,7 @@ class AuthService {
   }
 
   async useCoupon(code) {
+
     const rows = await this.authRepo.checkCoupon(code)
 
     if (rows.length === 0) {
@@ -473,13 +474,20 @@ class AuthService {
       throw new Error('Coupon expired')
     }
 
-    await this.authRepo.useCoupon(coupon.coupon_id)
+    const updated = await this.authRepo.useCoupon(coupon.coupon_id)
+
+    if (updated.rowCount === 0) {
+      throw new Error('Coupon already used')
+    }
 
     return {
       message: 'Coupon applied successfully',
-      discount_value: coupon.discount_value
+      discount_value: coupon.discount_value,
+      coupon_id: coupon.coupon_id,
+      restaurant_id: coupon.restaurant_id
     }
   }
+
 
 
   async refreshAccessToken(refreshToken) {
@@ -493,7 +501,7 @@ class AuthService {
       userType: decoded.userType,
       restaurantId: decoded.restaurantId,
     })
-    
+
     return { accessToken: newAccessToken }
   }
 
