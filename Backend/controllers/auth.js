@@ -173,20 +173,19 @@ export const createCoupon = async (req, res) => {
 
 export const useCoupon = async (req, res) => {
   try {
-
     const { code } = req.body
 
     const result = await authService.useCoupon(code)
 
     const io = req.app.get("io")
 
-    io.to(String(result.restaurant_id)).emit("couponUpdated", {
-      coupon_id: result.coupon_id,
+    io.to(code).emit("couponUpdated", {
+      code,
       status: "USED"
-    })
+    });
+
 
     return res.status(200).json(result)
-
   } catch (error) {
 
     if (

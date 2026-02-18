@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import useUser from "../../store/useUser";
 import api from "../../utils/api";
-import { io } from "socket.io-client";
+import socket from "../../utils/socket";
+import { useRef } from "react";
 
 const FALLBACK_IMAGE = "https://res.cloudinary.com/dqqkzucir/image/upload/v1770964754/depositphotos_289179526-stock-photo-white-torn-rolled-paper-light_drbebs.webp";
 
@@ -296,10 +297,25 @@ function MenuCard({ menu, onClick }) {
 // --- ส่วนของ MenuModal แบบคลีน (วางแทนที่อันเก่าได้เลย) ---
 
 function MenuModal({ menu: initialMenu, onClose, fetchLikedMenus, page, setSelectedMenu }) {
+
+  const joinedRoomsRef = useRef(new Set());
+
   const [menuData, setMenuData] = useState(initialMenu);
   const [claimingId, setClaimingId] = useState(null);
   const [showQRMap, setShowQRMap] = useState({});
   const [isUsedSuccess, setIsUsedSuccess] = useState(false);
+
+  const handleClose = () => {
+    // leave ทุก room ที่เคย join
+    joinedRoomsRef.current.forEach(code => {
+      socket.emit("leaveCoupon", code);
+      console.log("Left coupon room:", code);
+    });
+
+    joinedRoomsRef.current.clear();
+    onClose();
+  };
+
 
   useEffect(() => {
     setMenuData(initialMenu);
@@ -307,31 +323,49 @@ function MenuModal({ menu: initialMenu, onClose, fetchLikedMenus, page, setSelec
     setIsUsedSuccess(false);
   }, [initialMenu]);
 
+  // ✅ REALTIME (ใช้ coupon_code)
   useEffect(() => {
-    const socket = io(import.meta.env.VITE_API_URL);
+    if (!menuData?.promotions) return;
 
-    socket.on("couponUpdated", async (data) => {
-      console.log("Real-time update received:", data);
+    const claimedCoupons = menuData.promotions
+      .filter(p => p.coupon_code)
+      .map(p => p.coupon_code);
 
-      const isThisCouponUsed = menuData.promotions?.some(
-        (p) => String(p.promotion_id) === String(data.coupon_id)
-      );
+    if (claimedCoupons.length === 0) return;
 
-      if (isThisCouponUsed && data.status === "USED") {
+    // 🔥 JOIN แบบกันซ้ำ
+    claimedCoupons.forEach(code => {
+      if (!joinedRoomsRef.current.has(code)) {
+        socket.emit("joinCoupon", code);
+        joinedRoomsRef.current.add(code);
+        console.log("Joined coupon room:", code);
+      }
+    });
+
+    const handleUpdate = async (data) => {
+      if (!data?.code || data.status !== "USED") return;
+
+      if (claimedCoupons.includes(data.code)) {
         setIsUsedSuccess(true);
+
         const freshMenus = await fetchLikedMenus(page);
         const freshMenu = freshMenus.find(m => m.id === menuData.id);
+
         if (freshMenu) {
           setMenuData(freshMenu);
           setSelectedMenu(freshMenu);
         }
       }
-    });
+    };
+
+    socket.off("couponUpdated"); // 🔥 กันซ้ำ listener
+    socket.on("couponUpdated", handleUpdate);
 
     return () => {
-      socket.disconnect();
+      socket.off("couponUpdated", handleUpdate);
     };
-  }, [menuData, page, fetchLikedMenus, setSelectedMenu]);
+
+  }, [menuData?.promotions, menuData?.id, page]);
 
   const hasPromo = (menuData.canUsePromotion === true || menuData.canUsePromotion === 1) &&
     Array.isArray(menuData.promotions) && menuData.promotions.length > 0;
@@ -361,7 +395,7 @@ function MenuModal({ menu: initialMenu, onClose, fetchLikedMenus, page, setSelec
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" />
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={handleClose} className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" />
 
       <motion.div
         layoutId={`modal-${menuData.id}`}
@@ -377,12 +411,12 @@ function MenuModal({ menu: initialMenu, onClose, fetchLikedMenus, page, setSelec
               </motion.div>
               <h3 className="text-3xl font-black text-slate-900">ใช้คูปองสำเร็จ!</h3>
               <p className="text-slate-500 mt-2 text-lg">รายการนี้ได้รับการยืนยันเรียบร้อยแล้ว</p>
-              <button onClick={onClose} className="mt-8 bg-slate-900 text-white px-12 py-4 rounded-2xl font-bold hover:bg-emerald-600 transition-colors shadow-lg">ตกลง</button>
+              <button onClick={handleClose} className="mt-8 bg-slate-900 text-white px-12 py-4 rounded-2xl font-bold hover:bg-emerald-600 transition-colors shadow-lg">ตกลง</button>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <button onClick={onClose} className="absolute top-6 right-6 z-20 bg-slate-100 p-2.5 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all">
+        <button onClick={handleClose} className="absolute top-6 right-6 z-20 bg-slate-100 p-2.5 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all">
           <X size={20} />
         </button>
 
@@ -463,7 +497,7 @@ function MenuModal({ menu: initialMenu, onClose, fetchLikedMenus, page, setSelec
               </div>
             )}
 
-            <button onClick={onClose} className="w-full py-4 text-slate-400 font-bold text-[10px] hover:text-red-600 transition-all uppercase tracking-[0.2em]">
+            <button onClick={handleClose} className="w-full py-4 text-slate-400 font-bold text-[10px] hover:text-red-600 transition-all uppercase tracking-[0.2em]">
               กลับสู่หน้าแดชบอร์ด
             </button>
           </div>

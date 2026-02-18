@@ -484,11 +484,10 @@ class AuthService {
       message: 'Coupon applied successfully',
       discount_value: coupon.discount_value,
       coupon_id: coupon.coupon_id,
-      restaurant_id: coupon.restaurant_id
+      restaurant_id: coupon.restaurant_id,
+      code: coupon.code
     }
   }
-
-
 
   async refreshAccessToken(refreshToken) {
     if (!refreshToken) {
