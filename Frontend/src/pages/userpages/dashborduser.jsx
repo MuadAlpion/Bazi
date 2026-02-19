@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Sparkles, ArrowRight, ChevronRight, Loader2, X, Tag, Calendar, CheckCircle2, Ticket, Zap } from "lucide-react";
+import { Sparkles, Loader2, X, CheckCircle2, Ticket, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import useUser from "../../store/useUser";
 import api from "../../utils/api";
 import socket from "../../utils/socket";
-import { useRef } from "react";
 
 const FALLBACK_IMAGE = "https://res.cloudinary.com/dqqkzucir/image/upload/v1770964754/depositphotos_289179526-stock-photo-white-torn-rolled-paper-light_drbebs.webp";
 
@@ -18,14 +17,15 @@ const elementInfo = {
   water: { nameTh: "น้ำ", color: "from-blue-500 to-indigo-700", lightColor: "bg-blue-50", textColor: "text-blue-700" },
 };
 
-const baziMap = { ไม้: "wood", ไฟ: "fire", ดิน: "earth", ทอง: "metal", น้ำ: "water" };
+const baziMap = { "ไม้": "wood", "ไฟ": "fire", "ดิน": "earth", "ทอง": "metal", "น้ำ": "water" };
 
 export default function Dashboarduser() {
   const navigate = useNavigate();
   const token = useUser((state) => state.token);
-  const user = useUser((state) => state.user);
+  const userStore = useUser((state) => state.user);
 
   const [prediction, setPrediction] = useState("");
+  const [profile, setProfile] = useState(null);
   const [likedMenus, setLikedMenus] = useState([]);
   const [loadingPrediction, setLoadingPrediction] = useState(false);
   const [loadingMenus, setLoadingMenus] = useState(false);
@@ -37,17 +37,52 @@ export default function Dashboarduser() {
     if (!token) navigate("/loginuser");
   }, [token, navigate]);
 
-  const elementKey = useMemo(() => {
-    if (!user?.baziElement) return null;
-    return baziMap[user.baziElement];
-  }, [user]);
+  const baziDetails = useMemo(() => {
+    // 1. ดึงข้อมูลจากหลายแหล่ง (รองรับทั้งก้อน bazi ตรงๆ หรือ main_element)
+    // profile?.bazi?.main_element (จาก Login) 
+    // profile?.main_element (จาก API detail)
+    const fullElementName =
+      profile?.main_element ||
+      profile?.bazi?.main_element ||
+      userStore?.baziElement;
+
+    if (!fullElementName) return null;
+
+    // 2. สกัดชื่อธาตุ (ไม้, ไฟ, ดิน, ทอง, น้ำ)
+    const element = ["ไม้", "ไฟ", "ดิน", "ทอง", "น้ำ"].find(el => fullElementName.includes(el)) || "ไม้";
+
+    // 3. สกัดพลังงาน (หยิน, หยาง)
+    const yinYang = fullElementName.includes("หยาง") ? "หยาง" : "หยิน";
+
+    // 4. สกัดสถานะดิถี (แข็ง, อ่อน)
+    let strength = "-";
+    if (fullElementName.includes("อ่อน")) {
+      strength = "ดิถีอ่อน";
+    } else if (fullElementName.includes("แข็ง")) {
+      strength = "ดิถีแข็ง";
+    }
+
+    // 5. สกัดคะแนน (3.5)
+    const score = fullElementName.match(/\d+\.?\d*/)?.[0] || null;
+
+    return {
+      element,
+      yinYang,
+      strength,
+      score,
+      key: baziMap[element] || "wood"
+    };
+  }, [profile, userStore]); // เฝ้าดูทั้งก้อนเพื่อความชัวร์
 
   useEffect(() => {
     if (token) {
+
       fetchPrediction();
       fetchLikedMenus(page);
     }
   }, [token, page]);
+
+
 
   const fetchPrediction = async () => {
     try {
@@ -55,116 +90,121 @@ export default function Dashboarduser() {
       const res = await api.post("/api/auth/prediction");
       setPrediction(res.data.message || "");
     } catch (err) {
-      setPrediction("วันนี้โชคลาภกำลังเดินทางมาหาคุณ ประตูแห่งโอกาสกำลังเปิดออก");
+      console.error("Fetch prediction failed", err);
+      setPrediction("วันนี้โชคลาภกำลังเดินทางมาหาคุณ");
     } finally {
       setLoadingPrediction(false);
     }
   };
 
-  // ✅ return ข้อมูลกลับมาด้วย เพื่อให้ MenuModal นำไปใช้ต่อได้
-  const fetchLikedMenus = async (pageNum) => {
-    try {
-      setLoadingMenus(true);
-      const res = await api.post("/api/auth/menu/like", { page: pageNum });
-      const menus = res.data.menu || [];
-      setLikedMenus(menus);
-      setLastPage(res.data.lastPage || 1);
-      return menus;
-    } catch (err) {
-      console.error(err);
-      setLikedMenus([]);
-      return [];
-    } finally {
-      setLoadingMenus(false);
-    }
-  };
+const fetchLikedMenus = async (pageNum) => {
+  try {
+    setLoadingMenus(true);
+    const res = await api.post("/api/auth/menu/like", { page: pageNum });
+    const menus = res.data.menu || [];
+    setLikedMenus(menus);
+    setLastPage(res.data.lastPage || 1);
+    return menus;
+  } catch (err) {
+    setLikedMenus([]);
+    return [];
+  } finally {
+    setLoadingMenus(false);
+  }
+};
 
-  if (!token) return null;
+if (!token) return null;
 
-  return (
-    <div className="min-h-screen bg-[#f8fafc] pb-24 antialiased text-slate-900 overflow-x-hidden">
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .glass-card { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
-      `}</style>
+return (
+  <div className="min-h-screen bg-[#f8fafc] pb-24 antialiased text-slate-900 overflow-x-hidden">
+    <main className="container mx-auto px-4 md:px-8 pt-8 max-w-6xl space-y-10">
+      <HeaderSection user={profile || userStore} />
 
-      <main className="container mx-auto px-4 md:px-8 pt-8 max-w-6xl space-y-10">
-        <HeaderSection user={user} />
-
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div className="md:col-span-4 h-full">
-            <ElementSection elementKey={elementKey} />
-          </div>
-          <div className="md:col-span-8 h-full">
-            <PredictionSection prediction={prediction} loading={loadingPrediction} />
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+        <div className="md:col-span-4">
+          <ElementSection details={baziDetails} />
         </div>
+        <div className="md:col-span-8">
+          <PredictionSection prediction={prediction} loading={loadingPrediction} />
+        </div>
+      </div>
 
-        <RecommendedMenusSection
-          menus={likedMenus}
-          loading={loadingMenus}
+      <RecommendedMenusSection
+        menus={likedMenus}
+        loading={loadingMenus}
+        page={page}
+        lastPage={lastPage}
+        setPage={setPage}
+        setSelectedMenu={setSelectedMenu}
+      />
+    </main>
+
+    <AnimatePresence>
+      {selectedMenu && (
+        <MenuModal
+          menu={selectedMenu}
+          onClose={() => setSelectedMenu(null)}
+          fetchLikedMenus={fetchLikedMenus}
           page={page}
-          lastPage={lastPage}
-          setPage={setPage}
           setSelectedMenu={setSelectedMenu}
         />
-      </main>
-
-      <AnimatePresence>
-        {selectedMenu && (
-          <MenuModal
-            menu={selectedMenu}
-            onClose={() => setSelectedMenu(null)}
-            // ✅ ส่ง fetchLikedMenus, page, setSelectedMenu ให้ Modal ใช้รีเฟรชและอัปเดตตัวเอง
-            fetchLikedMenus={fetchLikedMenus}
-            page={page}
-            setSelectedMenu={setSelectedMenu}
-          />
-        )}
-      </AnimatePresence>
-    </div>
-  );
+      )}
+    </AnimatePresence>
+  </div>
+);
 }
 
 // --- UI COMPONENTS ---
 
 function HeaderSection({ user }) {
   return (
-    <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 px-1">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <div className="h-[2px] w-6 bg-amber-500 rounded-full" />
-          <span className="text-amber-600 font-bold tracking-[0.15em] text-[9px] uppercase">Destiny Guide</span>
-        </div>
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-slate-900">
-          สวัสดี, <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-orange-500 italic">
-            {user?.displayName || user?.name}
-          </span>
-        </h1>
+    <header className="px-1 space-y-1">
+      <div className="flex items-center gap-2">
+        <div className="h-[2px] w-6 bg-amber-500 rounded-full" />
+        <span className="text-amber-600 font-bold tracking-[0.15em] text-[9px] uppercase">Destiny Guide</span>
       </div>
+      <h1 className="text-2xl md:text-4xl font-black tracking-tight">
+        สวัสดี, <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-orange-500 italic">
+          {user?.name || user?.displayName}
+        </span>
+      </h1>
     </header>
   );
 }
 
-function ElementSection({ elementKey }) {
-  if (!elementKey) return null;
-  const el = elementInfo[elementKey];
+function ElementSection({ details }) {
+  if (!details) return (
+    <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 h-[250px] animate-pulse flex items-center justify-center">
+      <div className="text-slate-300">กำลังโหลดข้อมูลดวงชะตา...</div>
+    </div>
+  );
+
+  const el = elementInfo[details.key];
 
   return (
-    <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm flex flex-col items-center justify-center h-full min-h-[180px]">
-      <div className={`w-16 h-16 bg-gradient-to-br ${el.color} rounded-2xl flex items-center justify-center text-white text-2xl font-black shadow-lg mb-4`}>
-        {el.nameTh}
+    <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm flex flex-col h-full min-h-[250px]">
+      <div className="flex items-center gap-4 mb-10">
+        <div className={`w-16 h-16 bg-gradient-to-br ${el.color} rounded-2xl flex items-center justify-center text-white text-3xl font-black shadow-lg shrink-0`}>
+          {details.element}
+        </div>
+        <div className="space-y-0.5">
+          <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest">ธาตุประจำตัว</p>
+          <h2 className="text-2xl font-black text-slate-800">ธาตุ{details.element}</h2>
+        </div>
       </div>
-      <div className="text-center space-y-1">
-        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">ธาตุประจำตัว</p>
-        <h2 className="text-xl font-black text-slate-800">ธาตุ{el.nameTh}</h2>
-      </div>
-      <div className="flex gap-1.5 mt-4">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className={`w-1.5 h-1.5 rounded-full ${el.lightColor} ${el.textColor} bg-current opacity-20`} />
-        ))}
-        <div className="w-1.5 h-1.5 rounded-full bg-slate-100" />
+
+      <div className="grid grid-cols-2 gap-4 mt-auto">
+        {/* กล่องซ้าย: แสดงคำว่า "หยิน" หรือ "หยาง" */}
+        <div className={`${el.lightColor} p-4 rounded-3xl flex flex-col items-center justify-center`}>
+          <span className={`text-[10px] font-bold uppercase mb-1 opacity-70 ${el.textColor}`}>พลังงาน</span>
+          <span className={`text-base font-black ${el.textColor}`}>{details.yinYang}</span>
+        </div>
+
+        {/* กล่องขวา: แสดงคำว่า "ดิถีอ่อน" หรือ "ดิถีแข็ง" */}
+        <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex flex-col items-center justify-center">
+          <span className="text-[10px] text-slate-400 font-bold uppercase mb-1">สถานะดิถี</span>
+          <span className="text-base font-black text-slate-700">{details.strength}</span>
+        </div>
       </div>
     </div>
   );
@@ -254,7 +294,7 @@ function MenuCard({ menu, onClick }) {
         <img src={menu.image_url || FALLBACK_IMAGE} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="" />
 
         {/* Badge เล็กๆ ไม่แย่งซีนภาพ */}
-        
+
 
         {hasPromo && (
           <div className="absolute top-2.5 right-2.5 bg-red-600 text-white text-[8px] font-black px-2 py-1 rounded-lg">

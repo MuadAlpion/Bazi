@@ -21,6 +21,7 @@ import Logoutuser from '../pages/logoutuser';
 import Registeruser from '../pages/registeruser';
 import Goodbye from '../pages/Goodbye';
 import ScannerPage from '../pages/ScannerPage';
+import CustomerManagement from '../pages/restaurentpages/CustomerManagement';
 
 const router = createBrowserRouter([
     {
@@ -60,6 +61,7 @@ const router = createBrowserRouter([
         element: <Layoutrestaurent />,
         children: [
             { index: true, element: <Dashbordrestaurent /> },
+            { path: "customer", element: <CustomerManagement /> },
             { path: "profilerestaurent", element: <Profilerestaurent /> }
         ],
     },
